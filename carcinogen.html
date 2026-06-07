@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAR-T Cell vs Cancer Cell: Precision Immunotherapy Simulator</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg-deep: #07111F;
+            --bg-midnight: #0A1628;
+            --glass-panel: rgba(7, 17, 31, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            
+            --accent-cyan: #00D4FF;
+            --accent-green: #00FFB3;
+            --accent-magenta: #FF4FD8;
+            --danger-red: #D90429;
+            --neon-red: #FF2E63;
+            
+            --text-primary: #F8FAFC;
+            --text-secondary: #CBD5E1;
+            --font-sans: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'Space Grotesk', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-deep);
+            font-family: var(--font-sans);
+            color: var(--text-primary);
+        }
+
+        /* Full Screen WebGL Viewport Canvas Layer */
+        #webgl-scene-viewport {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Global UI Layout Grid Overlay */
+        .simulation-ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            padding: 1.5rem;
+            gap: 1.5rem;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* Left Control Pipeline Panel */
+        .control-sidebar {
+            background: var(--glass-panel);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid var(--glass-border);
+            border-top: 4px solid var(--accent-cyan);
+            border-radius: 24px;
+            padding: 1.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+            overflow-y: auto;
+            max-height: calc(100vh - 3rem);
+        }
+
+        .sidebar-header h1 {
+            font-family: var(--font-mono);
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #FFF, var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-header .sub-brand {
+            font-size: 0.7rem;
+            color: var(--accent-green);
+            text-transform: uppercase;
+            letter-spacing: 2.5px;
+            margin-top: 0.2rem;
+            font-weight: 600;
+        }
+
+        /* Modular Flow Timeline Nodes */
+        .module-pipeline {
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+        }
+
+        .module-node {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 16px;
+            padding: 1.1rem;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .module-node:hover {
+            border-color: rgba(0, 212, 255, 0.3);
+            background: rgba(0, 212, 255, 0.02);
+            transform: translateX(4px);
+        }
+
+        .module-node.active {
+            background: rgba(0, 212, 255, 0.05);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+        }
+
+        .module-node.completed {
+            border-color: var(--accent-green);
+        }
+
+        .node-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .node-index {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.06);
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+        }
+
+        .module-node.active .node-index {
+            background: var(--accent-cyan);
+            color: var(--bg-deep);
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+
+        .module-node.completed .node-index {
+            background: var(--accent-green);
+            color: var(--bg-deep);
+        }
+
+        .node-meta h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+
+        .node-detail {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Lab-Grade Interactive Component Control Elements */
+        .interactive-action-container {
+            margin-top: 0.75rem;
+        }
+
+        .antigen-selector-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.4rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .antigen-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            padding: 0.4rem;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .antigen-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #FFF;
+        }
+
+        .antigen-btn.selected {
+            background: rgba(0, 212, 255, 0.15);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+        }
+
+        .action-execution-btn {
+            background: linear-gradient(135deg, var(--accent-cyan), #00A6CC);
+            color: var(--bg-deep);
+            border: none;
+            padding: 0.75rem 1.25rem;
+            border-radius: 12px;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 0.8rem;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .action-execution-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 212, 255, 0.5);
+        }
+
+        .action-execution-btn:disabled {
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.2);
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Center-Right Workspace UI Layer Layout */
+        .workspace-center-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 0.5rem;
+        }
+
+        /* HUD Status Capsule (Top-Right) */
+        .hud-telemetry-capsule {
+            background: rgba(7, 17, 31, 0.9);
+            border: 1px solid var(--glass-border);
+            padding: 0.6rem 1.2rem;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            border-right: 3px solid var(--accent-green);
+        }
+
+        .hud-pulse-indicator {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-green);
+            animation: radar-pulse-glow 1.6s infinite alternate;
+        }
+
+        /* Centered Real-Time Intuitive Pedagogical Explanatory HUD (Bottom Middle-Right) */
+        .pedagogical-explanation-board {
+            background: var(--glass-panel);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid var(--glass-border);
+            border-bottom: 4px solid var(--accent-cyan);
+            border-radius: 24px;
+            padding: 1.5rem;
+            width: 100%;
+            max-width: 680px;
+            align-self: center;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-left: auto;
+            margin-right: auto;
+            transform: translateY(-10px);
+        }
+
+        .pedagogical-explanation-board h4 {
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+        }
+
+        .pedagogical-explanation-board p {
+            font-size: 0.82rem;
+            color: var(--text-primary);
+            line-height: 1.55;
+        }
+
+        /* Scientific Metric Real-Time Terminal View (Inside Left Panel) */
+        .predictive-analytics-box {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 14px;
+            padding: 0.9rem;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .analytics-title-lbl {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-magenta);
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+
+        .analytics-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .analytics-val {
+            color: var(--accent-cyan);
+            font-weight: 700;
+            text-shadow: 0 0 6px rgba(0, 212, 255, 0.3);
+        }
+
+        /* 3D Target Marker Annotations Overlays */
+        #spatial-html-annotations-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            overflow: hidden;
+        }
+
+        .spatial-annotation-label {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+
+        .annotation-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--accent-cyan);
+            margin-bottom: 6px;
+            transition: transform 0.2s;
+        }
+
+        .spatial-annotation-label:hover .annotation-dot {
+            transform: scale(1.5);
+        }
+
+        .annotation-text-capsule {
+            background: rgba(7, 17, 31, 0.95);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 6px;
+            padding: 0.3rem 0.6rem;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+        }
+
+        .spatial-annotation-label.tumor .annotation-dot { background: var(--neon-red); box-shadow: 0 0 12px var(--neon-red); }
+        .spatial-annotation-label.tumor .annotation-text-capsule { border-color: var(--neon-red); color: var(--neon-red); }
+
+        @keyframes radar-pulse-glow {
+            0% { transform: scale(0.85); opacity: 0.5; }
+            100% { transform: scale(1.25); opacity: 1; }
+        }
+
+        /* Custom scrollbar adjustments for sidebar panels */
+        .control-sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .control-sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="webgl-scene-viewport"></div>
+
+    <div id="spatial-html-annotations-container"></div>
+
+    <div class="simulation-ui-overlay">
+        
+        <div class="control-sidebar interactive">
+            <header class="sidebar-header">
+                <h1>BioCrest AI Labs</h1>
+                <div class="sub-brand">Precision Immunotherapy Engine</div>
+            </header>
+
+            <div class="module-pipeline">
+                
+                <div class="module-node active" id="mod-eng" onclick="transitionActiveModule('eng')">
+                    <div class="node-meta">
+                        <div class="node-index">01</div>
+                        <h3>CAR Receptor Engineering</h3>
+                    </div>
+                    <div class="node-detail">
+                        Configure synthetic Chimeric Antigen Receptors (CAR) optimized to selectively target antigen protein configurations expressed on mutant tumor membranes.
+                    </div>
+                    
+                    <div class="interactive-action-container" id="container-antigen-selector" onclick="event.stopPropagation()">
+                        <div class="antigen-selector-grid">
+                            <button class="antigen-btn selected" onclick="selectAntigenTarget('CD19', 0.98, 0.94)">CD19</button>
+                            <button class="antigen-btn" onclick="selectAntigenTarget('HER2', 0.85, 0.72)">HER2</button>
+                            <button class="antigen-btn" onclick="selectAntigenTarget('EGFR', 0.78, 0.61)">EGFR</button>
+                            <button class="antigen-btn" onclick="selectAntigenTarget('BCMA', 0.92, 0.89)">BCMA</button>
+                            <button class="antigen-btn" onclick="selectAntigenTarget('MSLN', 0.64, 0.55)">MSLN</button>
+                            <button class="antigen-btn" onclick="selectAntigenTarget('GD2', 0.73, 0.68)">GD2</button>
+                        </div>
+                        <button class="action-execution-btn" id="btn-splice-car" onclick="executeReceptorSplicingSequence()">
+                            <i class="fa-solid fa-dna"></i> Splice CAR Vectors
+                        </button>
+                    </div>
+                </div>
+
+                <div class="module-node" id="mod-nav" onclick="transitionActiveModule('nav')">
+                    <div class="node-meta">
+                        <div class="node-index">02</div>
+                        <h3>Chemotaxis Navigation</h3>
+                    </div>
+                    <div class="node-detail">
+                        Pilot the bioengineered T-cell along fluid chemokine gradients inside the vascular capillary system. Steer clear of immunosuppressive boundaries.
+                    </div>
+                    <div class="interactive-action-container" id="container-chemotaxis-btn" style="display:none;" onclick="event.stopPropagation()">
+                        <button class="action-execution-btn" id="btn-launch-chemotaxis" onclick="engageChemotaxisNavigationEngine()">
+                            <i class="fa-solid fa-compass"></i> Engage Vascular Navigation
+                        </button>
+                    </div>
+                </div>
+
+                <div class="module-node" id="mod-syn" onclick="transitionActiveModule('syn')">
+                    <div class="node-meta">
+                        <div class="node-index">03</div>
+                        <h3>Synapse Targeting & Binding</h3>
+                    </div>
+                    <div class="node-detail">
+                        Scan local tissue cellular microenvironments. Achieve high-affinity mechanical target capture and execute cytotoxic structural synapse bonding.
+                    </div>
+                    <div class="interactive-action-container" id="container-synapse-btn" style="display:none;" onclick="event.stopPropagation()">
+                        <button class="action-execution-btn" id="btn-lock-synapse" onclick="triggerImmuneSynapseDockingEvent()">
+                            <i class="fa-solid fa-link"></i> Lock Immune Synapse
+                        </button>
+                    </div>
+                </div>
+
+                <div class="module-node" id="mod-lys" onclick="transitionActiveModule('lys')">
+                    <div class="node-meta">
+                        <div class="node-index">04</div>
+                        <h3>Cytotoxic Lysis Induction</h3>
+                    </div>
+                    <div class="node-detail">
+                        Exocytose lethal payloads of perforin pore-forming proteins and granzyme enzymes to force target membrane blebbing and tumor apoptosis.
+                    </div>
+                    <div class="interactive-action-container" id="container-lysis-btn" style="display:none;" onclick="event.stopPropagation()">
+                        <button class="action-execution-btn" id="btn-induce-lysis" onclick="fireCytotoxicLysisSequence()">
+                            <i class="fa-solid fa-biohazard"></i> Initiate Perforin Blast
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="predictive-analytics-box">
+                <div class="analytics-title-lbl"><i class="fa-solid fa-chart-network"></i> Predictive Bioinformatics Matrix</div>
+                <div class="analytics-row">
+                    <span>Target Antigen Complex:</span>
+                    <span class="analytics-val" id="lbl-mat-target">CD19</span>
+                </div>
+                <div class="analytics-row">
+                    <span>Binding Affinity Probability:</span>
+                    <span class="analytics-val" id="lbl-mat-affinity">98.0%</span>
+                </div>
+                <div class="analytics-row">
+                    <span>Cytotoxic Lysis Potential Score:</span>
+                    <span class="analytics-val" id="lbl-mat-score">94.0%</span>
+                </div>
+                <div class="analytics-row">
+                    <span>Cellular Viability Metrics:</span>
+                    <span class="analytics-val" id="lbl-mat-viability">100% Nominal</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="workspace-center-right">
+            <div class="hud-telemetry-capsule">
+                <span class="hud-pulse-indicator"></span>
+                <span id="txt-hud-telemetry-readout">SYSTEM CALIBRATED // AWAITING GENETIC INPUT</span>
+            </div>
+
+            <div class="pedagogical-explanation-board interactive" id="learning-explanation-card">
+                <h4 id="board-header-title"><i class="fa-solid fa-microscope"></i> Precision Immunotherapy Core Lab</h4>
+                <p id="board-description-paragraph">Welcome to the CAR-T precision platform. Select a target tumor surface antigen molecule on your left console panel to begin the genetic engineering sequence required to modify patient T-cells into cancer-hunting therapeutics.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        /**
+         * Global Three.js Context Initialization & Camera Vector Matrix Rigging
+         */
+        const sceneViewport = document.getElementById('webgl-scene-viewport');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x07111F);
+        scene.fog = new THREE.FogExp2(0x07111F, 0.035);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 15);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.4;
+        sceneViewport.appendChild(renderer.domElement);
+
+        // Core Matrix Transformations Reference Systems Group
+        const environmentRootGroup = new THREE.Group();
+        scene.add(environmentRootGroup);
+
+        // Volumetric Dynamic Lighting Array Configuration
+        const environmentalAmbientLight = new THREE.AmbientLight(0x0a1d37, 3.5);
+        scene.add(environmentalAmbientLight);
+
+        const primaryBiotechGlowSource = new THREE.PointLight(0x00D4FF, 6, 25);
+        primaryBiotechGlowSource.position.set(-6, 4, 3);
+        scene.add(primaryBiotechGlowSource);
+
+        const secondaryTumorGlowSource = new THREE.PointLight(0xFF2E63, 4, 25);
+        secondaryTumorGlowSource.position.set(6, -4, 3);
+        scene.add(secondaryTumorGlowSource);
+
+        /**
+         * Procedural Generation of High-Fidelity Biological Cellular Geometry Components
+         */
+        
+        // 1. CAR T-Cell High-Fidelity Geometry Mesh Architecture (Left Focal Center Area)
+        const carTCellGroup = new THREE.Group();
+        carTCellGroup.position.set(-3.5, 0.5, 0);
+        environmentRootGroup.add(carTCellGroup);
+
+        // Intricately textured outer lymphocyte cellular plasma membrane wall surface
+        const lymphocyteBaseGeometry = new THREE.SphereGeometry(2.0, 64, 64);
+        const cellMembraneMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x0055ff,
+            roughness: 0.3,
+            metalness: 0.1,
+            transmission: 0.65,
+            thickness: 1.5,
+            transparent: true,
+            opacity: 0.9,
+            clearcoat: 0.5,
+            clearcoatRoughness: 0.2
+        });
+        const carTCellCoreMesh = new THREE.Mesh(lymphocyteBaseGeometry, cellMembraneMaterial);
+        carTCellGroup.add(carTCellCoreMesh);
+
+        // Array storage tracking synthetic surface receptor protein structures hooked onto T-Cell membrane
+        const structuralSurfaceReceptorsList = [];
+        const receptorBaseAnchorGroup = new THREE.Group();
+        carTCellGroup.add(receptorBaseAnchorGroup);
+
+        function constructSyntheticReceptorSpikeArray(receptorColorHex) {
+            // Strip out existing protein structures before building updated vectors
+            while(receptorBaseAnchorGroup.children.length > 0){ 
+                receptorBaseAnchorGroup.remove(receptorBaseAnchorGroup.children[0]); 
+            }
+            structuralSurfaceReceptorsList.length = 0;
+
+            const coordinateDistributionAngles = [
+                {th: 0.5, ph: 0.2}, {th: -0.4, ph: 0.6}, {th: 0.1, ph: -0.7},
+                {th: 0.8, ph: -0.3}, {th: -0.7, ph: -0.4}, {th: 0.2, ph: 0.9}
+            ];
+
+            coordinateDistributionAngles.forEach((angle, idx) => {
+                const individualProteinGroup = new THREE.Group();
+                
+                // Construct alpha-helix peptide stalk component
+                const peptideStalkGeo = new THREE.CylinderGeometry(0.05, 0.07, 0.8, 16);
+                peptideStalkGeo.translate(0, 0.4, 0);
+                const peptideMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x00D4FF, 
+                    roughness: 0.2,
+                    metalness: 0.2 
+                });
+                const stalkMesh = new THREE.Mesh(peptideStalkGeo, peptideMaterial);
+                stalkMesh.rotation.x = Math.PI / 2;
+                individualProteinGroup.add(stalkMesh);
+
+                // Construct customized highly-specific variable fragment region domain antigen-binding head
+                const antigenDomainGeo = new THREE.TorusKnotGeometry(0.12, 0.04, 32, 8);
+                antigenDomainGeo.translate(0, 0, 0.8);
+                const domainMaterial = new THREE.MeshStandardMaterial({ 
+                    color: receptorColorHex, 
+                    roughness: 0.1, 
+                    metalness: 0.4,
+                    emissive: receptorColorHex,
+                    emissiveIntensity: 0.25
+                });
+                const domainMesh = new THREE.Mesh(antigenDomainGeo, domainMaterial);
+                individualProteinGroup.add(domainMesh);
+
+                // Pivot vector conversions transforming angles into localized spherical membrane coordinates
+                individualProteinGroup.rotation.set(angle.th, angle.ph, 0);
+                
+                // Shift outwards along radius vector to sit flush on outer margin lines
+                individualProteinGroup.position.set(
+                    Math.sin(angle.ph) * Math.cos(angle.th) * 2.0,
+                    Math.sin(angle.th) * 2.0,
+                    Math.cos(angle.ph) * Math.cos(angle.th) * 2.0
+                );
+
+                receptorBaseAnchorGroup.add(individualProteinGroup);
+                structuralSurfaceReceptorsList.push(individualProteinGroup);
+            });
+        }
+        // Initialize default baseline receptors sequence map matching CD19 profiles
+        constructSyntheticReceptorSpikeArray(0x00FFB3);
+
+        // 2. Malignant Solid Tumor Adenocarcinoma Cancer Cell Model (Right Focal Area)
+        const malignancyTumorGroup = new THREE.Group();
+        malignancyTumorGroup.position.set(4.0, -0.5, 0);
+        environmentRootGroup.add(malignancyTumorGroup);
+
+        // Highly irregular, mutated topological mesh sphere structure representing a cancer cell
+        const cancerBaseGeometry = new THREE.SphereGeometry(2.3, 64, 64);
+        
+        // Displace vertex points mapping vectors to generate highly erratic mutated cellular surface contours
+        const vertexPosAttribute = cancerBaseGeometry.attributes.position;
+        for (let i = 0; i < vertexPosAttribute.count; i++) {
+            let vx = vertexPosAttribute.getX(i);
+            let vy = vertexPosAttribute.getY(i);
+            let vz = vertexPosAttribute.getZ(i);
+            
+            // Apply complex multi-frequency mathematical sine noise equations to simulate biological variance
+            let noiseScale = 1.0 + Math.sin(vx * 2.5) * Math.cos(vy * 2.5) * 0.12 + Math.cos(vz * 3.0) * 0.08;
+            vertexPosAttribute.setXYZ(i, vx * noiseScale, vy * noiseScale, vz * noiseScale);
+        }
+        cancerBaseGeometry.computeVertexNormals();
+
+        const tumorTissueMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0xD90429,
+            roughness: 0.6,
+            metalness: 0.1,
+            transmission: 0.2,
+            thickness: 0.8,
+            transparent: true,
+            opacity: 0.95,
+            emissive: 0x3a000c,
+            clearcoat: 0.1
+        });
+        const cancerCellCoreMesh = new THREE.Mesh(cancerBaseGeometry, tumorTissueMaterial);
+        malignancyTumorGroup.add(cancerCellCoreMesh);
+
+        // Surface Antigen Markers matching mutated malignant profile expressions
+        const tumorTargetAntigensGroup = new THREE.Group();
+        malignancyTumorGroup.add(tumorTargetAntigensGroup);
+        const trackedTumorAntigensList = [];
+
+        function constructMalignantSurfaceAntigens(targetAntigenHex) {
+            while(tumorTargetAntigensGroup.children.length > 0){ 
+                tumorTargetAntigensGroup.remove(tumorTargetAntigensGroup.children[0]); 
+            }
+            trackedTumorAntigensList.length = 0;
+
+            const antigenPlacements = [
+                {th: 0.4, ph: 2.8}, {th: -0.3, ph: 3.4}, {th: 0.1, ph: 2.2},
+                {th: -0.6, ph: 2.5}, {th: 0.8, ph: 3.1}, {th: -0.1, ph: 2.9}
+            ];
+
+            antigenPlacements.forEach((pos) => {
+                const antigenMeshGeo = new THREE.IcosahedronGeometry(0.15, 1);
+                const antigenMaterial = new THREE.MeshStandardMaterial({
+                    color: targetAntigenHex,
+                    roughness: 0.3,
+                    emissive: targetAntigenHex,
+                    emissiveIntensity: 0.3
+                });
+                const antigenMesh = new THREE.Mesh(antigenMeshGeo, antigenMaterial);
+
+                antigenMesh.position.set(
+                    Math.sin(pos.ph) * Math.cos(pos.th) * 2.3,
+                    Math.sin(pos.th) * 2.3,
+                    Math.cos(pos.ph) * Math.cos(pos.th) * 2.3
+                );
+                tumorTargetAntigensGroup.add(antigenMesh);
+                trackedTumorAntigensList.push(antigenMesh);
+            });
+        }
+        constructMalignantSurfaceAntigens(0x00FFB3); // Defaults matching cloned CD19 profile indicators
+
+        // 3. Fluid Capillary Vascular Blood Stream Background Particle Grid Flux Array
+        const bloodstreamParticleCount = 400;
+        const bloodstreamGeometry = new THREE.BufferGeometry();
+        const bloodstreamPositionsArray = new Float32Array(bloodstreamParticleCount * 3);
+        const bloodstreamSpeedsTrackList = [];
+
+        for(let p = 0; p < bloodstreamParticleCount * 3; p += 3) {
+            // Randomly scatter floating particles across long geometric field tunnels
+            bloodstreamPositionsArray[p] = (Math.random() - 0.5) * 30;
+            bloodstreamPositionsArray[p+1] = (Math.random() - 0.5) * 15;
+            bloodstreamPositionsArray[p+2] = (Math.random() - 0.5) * 10;
+            
+            bloodstreamSpeedsTrackList.push(new THREE.Vector3(
+                -0.04 - Math.random() * 0.08, // Rapid laminar leftward velocity sweep flow
+                (Math.random() - 0.5) * 0.01,
+                (Math.random() - 0.5) * 0.01
+            ));
+        }
+        bloodstreamGeometry.setAttribute('position', new THREE.BufferAttribute(bloodstreamPositionsArray, 3));
+        const bloodstreamMaterial = new THREE.PointsMaterial({
+            color: 0xFF2E63,
+            size: 0.08,
+            transparent: true,
+            opacity: 0.35,
+            blending: THREE.AdditiveBlending
+        });
+        const vascularBloodstreamParticleSystem = new THREE.Points(bloodstreamGeometry, bloodstreamMaterial);
+        environmentRootGroup.add(vascularBloodstreamParticleSystem);
+
+        // 4. Cytotoxic Lysis Intracellular Perforin Payload Vesicles Cluster System
+        const lysisParticlePoolCount = 180;
+        const lysisGeometry = new THREE.BufferGeometry();
+        const lysisPositionsArray = new Float32Array(lysisParticlePoolCount * 3);
+        const lysisVelocityVectors = [];
+
+        for(let i=0; i < lysisParticlePoolCount * 3; i += 3) {
+            lysisPositionsArray[i] = 0;
+            lysisPositionsArray[i+1] = 0;
+            lysisPositionsArray[i+2] = 0;
+            lysisVelocityVectors.push(new THREE.Vector3(0,0,0));
+        }
+        lysisGeometry.setAttribute('position', new THREE.BufferAttribute(lysisPositionsArray, 3));
+        const lysisParticleMaterial = new THREE.PointsMaterial({
+            color: 0x00FFB3,
+            size: 0.06,
+            transparent: true,
+            opacity: 0.0,
+            blending: THREE.AdditiveBlending
+        });
+        const perforinLysisParticleSystem = new THREE.Points(lysisGeometry, lysisParticleMaterial);
+        environmentRootGroup.add(perforinLysisParticleSystem);
+
+        /**
+         * Comprehensive Multi-Disciplinary Pedagogical Analysis Knowledge Bases
+         */
+        const pedagogicalInsightDatabase = {
+            eng: {
+                title: "CAR Receptor Engineering Lab Mechanics",
+                desc: "Chimeric Antigen Receptors (CAR) are synthetic, engineered fusion proteins designed to bypass traditional MHC restriction. By splicing an extracellular single-chain variable fragment (scFv) antigen-binding domain directly to internal CD3-zeta and costimulatory signaling clusters, the cell gains high-affinity targeting and instant killer activation when matching specific mutated cell surfaces."
+            },
+            nav: {
+                title: "Vascular Chemotaxis & Tissue Extravasation",
+                desc: "Once infused, CAR-T cells navigate turbulent physiological flow paths by following chemoattractant gradient pathways released by cancerous tissue sites. The engineering profiles must balance cell viability against immune evasion blocks to allow the cell to successfully attach to blood vessel walls and migrate out into solid tumor beds."
+            },
+            syn: {
+                title: "Immunological Synapse Precision Assembly",
+                desc: "When a target is locked, CAR receptors bind directly to the designated surface antigens, forming a secure immunological synapse. This localized microenvironment concentrates structural mechanics, triggers receptor aggregation, deforms membranes, and initiates massive internal calcium signaling cascades that unleash cytotoxic payloads."
+            },
+            lys: {
+                title: "Cytotoxic Degranulation & Apoptotic Lysis Cascade",
+                desc: "The active immune synapse triggers the directed exocytosis of lytic vesicles. Perforin molecules fuse into the target membrane, assembling stable pore structures. This lets Granzyme B serine proteases stream inside to activate Caspase pathways. This cuts apart internal scaffolding structures, causing characteristic membrane blebbing, DNA fragmentation, and rapid cancer cell apoptosis."
+            }
+        };
+
+        /**
+         * Construct Interactive 2D Floating Spatial Canvas Tracker Labels
+         */
+        const spatialAnnotationsContainer = document.getElementById('spatial-html-annotations-container');
+        const spatialConfigurationProfiles = [
+            { id: "lbl-cart", text: "Bioengineered CAR-T Lymphocyte", className: "cart", worldPos: new THREE.Vector3(-3.5, 2.8, 0) },
+            { id: "lbl-receptor", text: "scFv Synthetic CAR Variable Domain", className: "cart", worldPos: new THREE.Vector3(-1.8, 1.2, 0) },
+            { id: "lbl-antigen", text: "Target Surface Tumor Antigen Profile", className: "tumor", worldPos: new THREE.Vector3(1.6, -1.0, 0) },
+            { id: "lbl-tumor", text: "Malignant Carcinoma Solid Tumor Cell", className: "tumor", worldPos: new THREE.Vector3(4.0, 2.2, 0) }
+        ];
+
+        const activeLiveLabelsTrackerList = [];
+        spatialConfigurationProfiles.forEach(cfg => {
+            const labelElementDom = document.createElement('div');
+            labelElementDom.className = `spatial-annotation-label ${cfg.className}`;
+            labelElementDom.innerHTML = `
+                <div class="annotation-dot"></div>
+                <div class="annotation-text-capsule">${cfg.text}</div>
+            `;
+            
+            labelElementDom.addEventListener('click', () => {
+                const sectionMappingKey = cfg.className === "cart" ? "eng" : "syn";
+                displayTargetPedagogicalDataOnBoard(sectionMappingKey);
+            });
+
+            spatialAnnotationsContainer.appendChild(labelElementDom);
+            activeLiveLabelsTrackerList.push({ domNode: labelElementDom, positionWorldVector: cfg.worldPos });
+        });
+
+        const projectionCalculationVector = new THREE.Vector3();
+        function synchronizeSpatialLabelsScreenCoordinates() {
+            activeLiveLabelsTrackerList.forEach(item => {
+                projectionCalculationVector.copy(item.positionWorldVector);
+                projectionCalculationVector.project(camera);
+
+                const computedScreenX = (projectionCalculationVector.x * 0.5 + 0.5) * window.innerWidth;
+                const computedScreenY = (projectionCalculationVector.y * -0.5 + 0.5) * window.innerHeight;
+
+                // Restrict and mask tracking element rendering if target bounds escape current view frustum lines
+                if (projectionCalculationVector.z > 1) {
+                    item.domNode.style.opacity = 0;
+                } else {
+                    item.domNode.style.opacity = 1;
+                    item.domNode.style.left = `${computedScreenX}px`;
+                    item.domNode.style.top = `${computedScreenY}px`;
+                }
+            });
+        }
+
+        /**
+         * Global Architecture Simulation Interface Flow Controllers
+         */
+        let currentActiveModulePipelineKey = 'eng';
+        let antigenTargetSelectionProfile = 'CD19';
+
+        function selectAntigenTarget(antigenName, bindingAffinity, cytotoxicScore) {
+            antigenTargetSelectionProfile = antigenName;
+            
+            // Toggle active graphic markers across selected option array groups
+            document.querySelectorAll('.antigen-btn').forEach(btn => {
+                if(btn.innerText === antigenName) btn.classList.add('selected');
+                else btn.classList.remove('selected');
+            });
+
+            // Refresh data matrices inside current dashboard
+            document.getElementById('lbl-mat-target').innerText = antigenName;
+            document.getElementById('lbl-mat-affinity').innerText = `${(bindingAffinity * 100).toFixed(1)}%`;
+            document.getElementById('lbl-mat-score').innerText = `${(cytotoxicScore * 100).toFixed(1)}%`;
+
+            // Adjust color matrices across structural protein components to reflect engineered molecular shifts
+            let updatedTargetHexColor = 0x00FFB3; // Default CD19 (Green profile)
+            if (antigenName === 'HER2') updatedTargetHexColor = 0xFF4FD8;
+            if (antigenName === 'EGFR') updatedTargetHexColor = 0x00D4FF;
+            if (antigenName === 'BCMA') updatedTargetHexColor = 0xFFAA00;
+            if (antigenName === 'MSLN') updatedTargetHexColor = 0x9D4EDD;
+            if (antigenName === 'GD2')  updatedTargetHexColor = 0xFF2E63;
+
+            constructSyntheticReceptorSpikeArray(updatedTargetHexColor);
+            constructMalignantSurfaceAntigens(updatedTargetHexColor);
+
+            document.getElementById('txt-hud-telemetry-readout').innerText = `RECONFIGURING STRUCTURAL VECTOR ARRAYS FOR ${antigenName}`;
+        }
+
+        function transitionActiveModule(moduleKey) {
+            document.querySelectorAll('.module-node').forEach(el => el.classList.remove('active'));
+            
+            const targetedElementNode = document.getElementById(`mod-${moduleKey}`);
+            if (targetedElementNode) targetedElementNode.classList.add('active');
+
+            currentActiveModulePipelineKey = moduleKey;
+            displayTargetPedagogicalDataOnBoard(moduleKey);
+        }
+
+        function displayTargetPedagogicalDataOnBoard(key) {
+            const documentationDataset = pedagogicalInsightDatabase[key];
+            if (!documentationDataset) return;
+
+            const trackingCardDom = document.getElementById('learning-explanation-card');
+            gsap.to(trackingCardDom, {
+                opacity: 0.15, y: 8, duration: 0.2, onComplete: () => {
+                    document.getElementById('board-header-title').innerHTML = `<i class="fa-solid fa-microscope"></i> ${documentationDataset.title}`;
+                    document.getElementById('board-description-paragraph').innerText = documentationDataset.desc;
+                    gsap.to(trackingCardDom, { opacity: 1, y: 0, duration: 0.25 });
+                }
+            });
+        }
+
+        /**
+         * Core Computational Engine Automation Sequence Phases
+         */
+        
+        // Step 1 Execution Task Routine
+        function executeReceptorSplicingSequence() {
+            document.getElementById('txt-hud-telemetry-readout').innerText = "EXECUTING CRISPR-CAS9 GENETIC CAR INSERTION...";
+            document.getElementById('btn-splice-car').disabled = true;
+
+            // Trigger structural pulsing camera effects inside current viewport workspace environment
+            gsap.timeline()
+                .to(carTCellGroup.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 0.4, yoyo: true, repeat: 1 })
+                .to(camera.position, { z: 12, duration: 1.2, ease: "power2.inOut" })
+                .to({}, {
+                    duration: 0.2,
+                    onComplete: () => {
+                        document.getElementById('mod-eng').classList.remove('active');
+                        document.getElementById('mod-eng').classList.add('completed');
+                        document.getElementById('container-antigen-selector').style.display = "none";
+                        
+                        document.getElementById('mod-nav').classList.add('active');
+                        document.getElementById('container-chemotaxis-btn').style.display = "block";
+                        currentActiveModulePipelineKey = 'nav';
+                        displayTargetPedagogicalDataOnBoard('nav');
+                        document.getElementById('txt-hud-telemetry-readout').innerText = "VECTOR INTEGRATION SUCCESSFUL // INFUSION READY";
+                    }
+                });
+        }
+
+        // Step 2 Execution Task Routine
+        function engageChemotaxisNavigationEngine() {
+            document.getElementById('txt-hud-telemetry-readout').innerText = "NAVIGATING INTERSTITIAL CAPILLARY STREAM VELOCITIES...";
+            document.getElementById('btn-launch-chemotaxis').disabled = true;
+
+            // Trigger dynamic linear travel path translations across target 3D cell meshes
+            gsap.timeline()
+                .to(carTCellGroup.position, { x: -1.2, y: -0.2, duration: 2.2, ease: "power1.inOut" })
+                .to(camera.position, { x: 1.0, z: 10, duration: 2.2, ease: "power1.inOut" }, 0)
+                .to({}, {
+                    duration: 0.1,
+                    onComplete: () => {
+                        document.getElementById('mod-nav').classList.remove('active');
+                        document.getElementById('mod-nav').classList.add('completed');
+                        document.getElementById('container-chemotaxis-btn').style.display = "none";
+
+                        document.getElementById('mod-syn').classList.add('active');
+                        document.getElementById('container-synapse-btn').style.display = "block";
+                        currentActiveModulePipelineKey = 'syn';
+                        displayTargetPedagogicalDataOnBoard('syn');
+                        document.getElementById('txt-hud-telemetry-readout').innerText = "ANTIGEN BOUNDARY DETECTED // LOCK ON CONFIRMED";
+                    }
+                });
+        }
+
+        // Step 3 Execution Task Routine
+        function triggerImmuneSynapseDockingEvent() {
+            document.getElementById('txt-hud-telemetry-readout').innerText = "ASSEMBLING CYTOTOXIC IMMUNE SYNAPSE DOCK MATRIX...";
+            document.getElementById('btn-lock-synapse').disabled = true;
+
+            // Tighten mechanical boundaries linking both tracking structures directly into contact line junctions
+            gsap.timeline()
+                .to(carTCellGroup.position, { x: -0.8, y: -0.2, duration: 1.5, ease: "slow(0.7, 0.7, false)" })
+                .to(malignancyTumorGroup.position, { x: 2.3, y: -0.2, duration: 1.5, ease: "slow(0.7, 0.7, false)" }, 0)
+                .to(camera.position, { x: 0.7, y: 0, z: 6.5, duration: 1.8, ease: "power2.inOut" }, 0)
+                .to({}, {
+                    duration: 0.1,
+                    onComplete: () => {
+                        document.getElementById('mod-syn').classList.remove('active');
+                        document.getElementById('mod-syn').classList.add('completed');
+                        document.getElementById('container-synapse-btn').style.display = "none";
+
+                        document.getElementById('mod-lys').classList.add('active');
+                        document.getElementById('container-lysis-btn').style.display = "block";
+                        currentActiveModulePipelineKey = 'lys';
+                        displayTargetPedagogicalDataOnBoard('lys');
+                        document.getElementById('txt-hud-telemetry-readout').innerText = "SYNAPSE LOCK SECURE // TARGET READY FOR DEGRANULATION";
+                        
+                        // Update target positions mapped across floating spatial labels post transformation shifts
+                        spatialConfigurationProfiles[0].worldPos.set(-1.8, 1.8, 0);
+                        spatialConfigurationProfiles[1].worldPos.set(-0.4, 0.5, 0);
+                        spatialConfigurationProfiles[2].worldPos.set(0.6, -0.5, 0);
+                        spatialConfigurationProfiles[3].worldPos.set(2.4, 1.8, 0);
+                    }
+                });
+        }
+
+        // Step 4 Execution Task Routine: Cytotoxic Perforin Blast & Tumor Apoptosis
+        function fireCytotoxicLysisSequence() {
+            document.getElementById('txt-hud-telemetry-readout').innerText = "INDUCING DEGRANULATION EXOCYTOSIS TIMELINE BLAST...";
+            document.getElementById('btn-induce-lysis').disabled = true;
+
+            // Set default baseline spatial coordinate attributes back inside lytic tracking positions array fields
+            const positionsRef = perforinLysisParticleSystem.geometry.attributes.position;
+            for(let i=0; i<lysisParticlePoolCount; i++) {
+                positionsRef.setXYZ(i, -0.5 + (Math.random()-0.5)*0.2, -0.2 + (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2);
+                // Launch high velocity trajectories across the target cleft interface zone channel
+                lysisVelocityVectors[i].set(0.06 + Math.random()*0.12, (Math.random()-0.5)*0.05, (Math.random()-0.5)*0.05);
+            }
+            positionsRef.needsUpdate = true;
+            lysisParticleMaterial.opacity = 1.0;
+
+            document.getElementById('lbl-mat-viability').innerText = "Malignant Apoptosis Mode";
+
+            // Trigger terminal death mechanics deformation sequences over the tumor cell mesh
+            gsap.timeline()
+                .to({}, {
+                    duration: 1.4,
+                    onUpdate: () => {
+                        // Apply volatile high frequency structural noise to deform the cancer cell geometry, simulating membrane blebbing
+                        const vAttr = cancerBaseGeometry.attributes.position;
+                        const runningTime = performance.now() * 0.02;
+                        for (let i = 0; i < vAttr.count; i++) {
+                            let vx = vAttr.getX(i);
+                            let vy = vAttr.getY(i);
+                            let vz = vAttr.getZ(i);
+                            let structuralDeformationFactor = 1.0 + Math.sin(vx * 4.0 + runningTime) * Math.cos(vy * 4.0 + runningTime) * 0.08;
+                            vAttr.setXYZ(i, vx * structuralDeformationFactor, vy * structuralDeformationFactor, vz * structuralDeformationFactor);
+                        }
+                        vAttr.needsUpdate = true;
+                        cancerBaseGeometry.computeVertexNormals();
+                        
+                        // Shift tumor coloration profile to show metabolic bleaching and necrotic cellular breakdown
+                        tumorTissueMaterial.color.setHex(0x3a3b3c);
+                        tumorTissueMaterial.emissive.setHex(0x1a0a0a);
+                    }
+                })
+                .to(malignancyTumorGroup.scale, {
+                    x: 0.15, y: 0.15, z: 0.15, duration: 1.6, ease: "power4.inOut",
+                    onComplete: () => {
+                        // Dissolve active particle system streams on completion
+                        gsap.to(lysisParticleMaterial, { opacity: 0, duration: 0.5 });
+                        document.getElementById('txt-hud-telemetry-readout').innerText = "APOPTOSIS COMPLETE // NEOPLASTIC BURDEN CLEAR";
+                        document.getElementById('lbl-mat-score').innerText = "100% Cleared";
+                        
+                        // Unveil comprehensive execution resetting loops back to primary state profiles
+                        setTimeout(resetSimulationStateToBaseline, 3500);
+                    }
+                });
+        }
+
+        function resetSimulationStateToBaseline() {
+            // Restore structural scale transformations back to operational base metrics
+            malignancyTumorGroup.scale.set(1, 1, 1);
+            carTCellGroup.scale.set(1, 1, 1);
+            
+            carTCellGroup.position.set(-3.5, 0.5, 0);
+            malignancyTumorGroup.position.set(4.0, -0.5, 0);
+            camera.position.set(0, 0, 15);
+
+            tumorTissueMaterial.color.setHex(0xD90429);
+            tumorTissueMaterial.emissive.setHex(0x3a000c);
+
+            // Recompute base contours back across the structural tumor shell asset layers
+            const vAttr = cancerBaseGeometry.attributes.position;
+            for (let i = 0; i < vAttr.count; i++) {
+                let nScale = 1.0 + Math.sin(vAttr.getX(i) * 2.5) * Math.cos(vAttr.getY(i) * 2.5) * 0.12;
+                vAttr.setXYZ(i, vAttr.getX(i) * nScale, vAttr.getY(i) * nScale, vAttr.getZ(i) * nScale);
+            }
+            vAttr.needsUpdate = true;
+            cancerBaseGeometry.computeVertexNormals();
+
+            // Restore spatial coordinate tags configuration back to original design limits
+            spatialConfigurationProfiles[0].worldPos.set(-3.5, 2.8, 0);
+            spatialConfigurationProfiles[1].worldPos.set(-1.8, 1.2, 0);
+            spatialConfigurationProfiles[2].worldPos.set(1.6, -1.0, 0);
+            spatialConfigurationProfiles[3].worldPos.set(4.0, 2.2, 0);
+
+            // Toggle interface state nodes back to launch frameworks
+            document.querySelectorAll('.module-node').forEach(node => node.classList.remove('completed', 'active'));
+            document.getElementById('mod-eng').classList.add('active');
+
+            document.getElementById('container-antigen-selector').style.display = "block";
+            document.getElementById('container-chemotaxis-btn').style.display = "none";
+            document.getElementById('container-synapse-btn').style.display = "none";
+            document.getElementById('container-lysis-btn').style.display = "none";
+
+            document.querySelectorAll('.action-execution-btn').forEach(btn => btn.disabled = false);
+            
+            selectAntigenTarget('CD19', 0.98, 0.94);
+            currentActiveModulePipelineKey = 'eng';
+            displayTargetPedagogicalDataOnBoard('eng');
+            document.getElementById('txt-hud-telemetry-readout').innerText = "SYSTEM REPOLARIZED // CORE SIMULATION RE-BASELINE READY";
+        }
+
+        /**
+         * Frame Update Loop Processing Environment Render Execution Pipelines
+         */
+        const internalPrecisionTimer = new THREE.Clock();
+
+        function executeAppRenderPipelineLoop() {
+            requestAnimationFrame(executeAppRenderPipelineLoop);
+            
+            const elapsedRunningTime = internalPrecisionTimer.getElapsedTime();
+
+            // Apply slow background kinetic rotations across primary cellular group assets
+            carTCellGroup.rotation.y = elapsedRunningTime * 0.12;
+            carTCellGroup.rotation.z = Math.sin(elapsedRunningTime * 0.4) * 0.08;
+            
+            malignancyTumorGroup.rotation.y = -elapsedRunningTime * 0.08;
+            malignancyTumorGroup.rotation.x = Math.cos(elapsedRunningTime * 0.3) * 0.06;
+
+            // Process dynamic linear particle transformations across background red bloodstream systems
+            const bloodPosAttr = vascularBloodstreamParticleSystem.geometry.attributes.position;
+            for(let i=0; i < bloodstreamParticleCount; i++) {
+                let px = bloodPosAttr.getX(i) + bloodstreamSpeedsTrackList[i].x;
+                let py = bloodPosAttr.getY(i) + bloodstreamSpeedsTrackList[i].y;
+                let pz = bloodPosAttr.getZ(i) + bloodstreamSpeedsTrackList[i].z;
+
+                // Infinite containment box recycle bounds check loops
+                if(px < -15) px = 15;
+                bloodPosAttr.setXYZ(i, px, py, pz);
+            }
+            bloodPosAttr.needsUpdate = true;
+
+            // Process dynamic vector mapping transformations across active lysis chemical particles
+            if (lysisParticleMaterial.opacity > 0.0) {
+                const lysPosAttr = perforinLysisParticleSystem.geometry.attributes.position;
+                for(let i=0; i < lysisParticlePoolCount; i++) {
+                    let lx = lysPosAttr.getX(i) + lysisVelocityVectors[i].x;
+                    let ly = lysPosAttr.getY(i) + lysisVelocityVectors[i].y;
+                    let lz = lysPosAttr.getZ(i) + lysisVelocityVectors[i].z;
+
+                    // Stop outward drift once particles reach the target cancer membrane wall
+                    if(lx > 2.5) {
+                        lx = -0.5; // Recycle path stream looping loops
+                    }
+                    lysPosAttr.setXYZ(i, lx, ly, lz);
+                }
+                lysPosAttr.needsUpdate = true;
+            }
+
+            synchronizeSpatialLabelsScreenCoordinates();
+            renderer.render(scene, camera);
+        }
+
+        // Adjust perspective matrices on terminal window resize actions
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Fire rendering systems loop execution engines
+        executeAppRenderPipelineLoop();
+    </script>
+</body>
+</html>
